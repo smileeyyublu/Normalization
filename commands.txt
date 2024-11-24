@@ -1,0 +1,30 @@
+Commands
+
+
+psql -d postgres -U postgres
+
+
+
+CREATE ROLE ismayil WITH LOGIN PASSWORD 'root';
+
+
+ALTER ROLE ismayil CREATEDB;
+
+\q
+
+
+psql -d postgres -U ismayil
+
+CREATE DATABASE normalization_a2;
+
+
+--------------------------------------------------------
+
+
+pip install csvkit
+
+pip install psycopg2
+
+csvsql --db postgresql://ismayil:root@localhost/normalization_a2 --tables Unnormalized --insert Unnormalized1.csv
+
+
