@@ -1,0 +1,123 @@
+-- Create Books table
+CREATE TABLE IF NOT EXISTS Books (
+    ISBN NUMERIC PRIMARY KEY,
+    Title VARCHAR(255) NOT NULL,
+    Edition NUMERIC NOT NULL,
+    Publisher VARCHAR(100) NOT NULL,
+    Publisher_address VARCHAR(255) NOT NULL,
+    Pages NUMERIC NOT NULL,
+    Year NUMERIC NOT NULL
+);
+
+-- Create Authors table with auto-incrementing ID
+CREATE TABLE IF NOT EXISTS Authors (
+    Author_ID INTEGER PRIMARY KEY,
+    Author_Name VARCHAR(50) NOT NULL
+);
+
+-- Create Courses table
+CREATE TABLE IF NOT EXISTS Courses (
+    CRN NUMERIC PRIMARY KEY,
+    Course_name VARCHAR(255) NOT NULL
+);
+
+-- Create junction table for Books and Authors
+CREATE TABLE IF NOT EXISTS BOOK_AUTHORS (
+    ISBN NUMERIC NOT NULL,
+    Author_ID INTEGER NOT NULL,
+    PRIMARY KEY (ISBN, Author_ID),
+    FOREIGN KEY (ISBN) REFERENCES Books(ISBN),
+    FOREIGN KEY (Author_ID) REFERENCES Authors(Author_ID)
+);
+
+-- Create junction table for Books and Courses
+CREATE TABLE IF NOT EXISTS BOOK_COURSES (
+    ISBN NUMERIC NOT NULL,
+    CRN NUMERIC NOT NULL,
+    PRIMARY KEY (ISBN, CRN),
+    FOREIGN KEY (ISBN) REFERENCES Books(ISBN),
+    FOREIGN KEY (CRN) REFERENCES Courses(CRN)
+);
+
+
+
+
+
+-------------------------------------------------------------------------
+
+
+
+
+-- Insert data into Books table
+INSERT INTO Books (ISBN, Title, Edition, Publisher, Publisher_address, Pages, Year)
+SELECT DISTINCT
+    "ISBN (PK2)",
+    "Title",
+    "Edition",
+    "Publisher",
+    "Publisher address",
+    "Pages",
+    "Year"
+FROM "Unnormalized";
+
+-- Insert data into Courses table
+INSERT INTO Courses (CRN, Course_name)
+SELECT DISTINCT
+    "CRN (PK1)",
+    "Course name"
+FROM "Unnormalized";
+
+
+CREATE SEQUENCE authors_author_id_seq OWNED BY Authors.author_id;
+ALTER TABLE Authors ALTER COLUMN author_id SET DEFAULT nextval('authors_author_id_seq');
+
+-- Insert Authors (splitting multiple authors and removing duplicates)
+WITH RECURSIVE split_authors AS (
+    SELECT DISTINCT unnest(string_to_array("Authors", ',')) as author_name
+    FROM "Unnormalized"
+)
+INSERT INTO Authors (Author_Name)
+SELECT TRIM(author_name)
+FROM split_authors
+WHERE author_name IS NOT NULL
+ON CONFLICT DO NOTHING;
+
+-- Insert data into BOOK_AUTHORS junction table
+WITH RECURSIVE split_authors AS (
+    SELECT 
+        "ISBN (PK2)" as isbn,
+        TRIM(unnest(string_to_array("Authors", ','))) as author_name
+    FROM "Unnormalized"
+)
+INSERT INTO BOOK_AUTHORS (ISBN, Author_ID)
+SELECT DISTINCT
+    sa.isbn,
+    a.Author_ID
+FROM split_authors sa
+JOIN Authors a ON TRIM(a.Author_Name) = TRIM(sa.author_name);
+
+-- Insert data into BOOK_COURSES junction table
+INSERT INTO BOOK_COURSES (ISBN, CRN)
+SELECT DISTINCT
+    "ISBN (PK2)",
+    "CRN (PK1)"
+FROM "Unnormalized";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
