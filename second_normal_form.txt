@@ -3,7 +3,7 @@ DROP TABLE IF EXISTS public.book_authors CASCADE;
 DROP TABLE IF EXISTS public.books CASCADE;
 DROP TABLE IF EXISTS public.courses CASCADE;
 DROP TABLE IF EXISTS public.book_courses CASCADE;
-DROP TABLE IF EXISTS public.publishers CASCADE;
+
 
 
 
