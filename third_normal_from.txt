@@ -1,0 +1,144 @@
+DROP TABLE IF EXISTS public.book_courses CASCADE;
+DROP TABLE IF EXISTS public.book_authors CASCADE;
+DROP TABLE IF EXISTS public.books CASCADE;
+DROP TABLE IF EXISTS public.authors CASCADE;
+DROP TABLE IF EXISTS public.courses CASCADE;
+DROP TABLE IF EXISTS public.publishers CASCADE;
+
+
+-- Create Addresses table
+CREATE TABLE IF NOT EXISTS Addresses (
+    Address_ID INTEGER PRIMARY KEY,
+    Publisher_address VARCHAR(100) NOT NULL
+);
+
+-- Create Publishers table with reference to Addresses
+CREATE TABLE IF NOT EXISTS Publishers (
+    Publisher_ID INTEGER PRIMARY KEY,
+    Publisher_name VARCHAR(100) NOT NULL,
+    Address_ID INTEGER NOT NULL,
+    FOREIGN KEY (Address_ID) REFERENCES Addresses(Address_ID)
+);
+
+-- Create Books table
+CREATE TABLE IF NOT EXISTS Books (
+    ISBN VARCHAR(20) PRIMARY KEY,
+    Title VARCHAR(255) NOT NULL,
+    Edition INTEGER NOT NULL,
+    Publisher_ID INTEGER NOT NULL,
+    Pages INTEGER NOT NULL,
+    Year INTEGER NOT NULL,
+    FOREIGN KEY (Publisher_ID) REFERENCES Publishers(Publisher_ID)
+);
+
+-- Rest of the tables remain the same
+CREATE TABLE IF NOT EXISTS Authors (
+    Author_ID INTEGER PRIMARY KEY,
+    Author_Name VARCHAR(50) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS Courses (
+    CRN VARCHAR(18) PRIMARY KEY,
+    Course_name VARCHAR(255) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS BOOK_AUTHORS (
+    ISBN VARCHAR(18) NOT NULL,
+    Author_ID INTEGER NOT NULL,
+    PRIMARY KEY (ISBN, Author_ID),
+    FOREIGN KEY (ISBN) REFERENCES Books(ISBN),
+    FOREIGN KEY (Author_ID) REFERENCES Authors(Author_ID)
+);
+
+CREATE TABLE IF NOT EXISTS BOOK_COURSES (
+    ISBN VARCHAR(18) NOT NULL,
+    CRN VARCHAR(18) NOT NULL,
+    PRIMARY KEY (ISBN, CRN),
+    FOREIGN KEY (ISBN) REFERENCES Books(ISBN),
+    FOREIGN KEY (CRN) REFERENCES Courses(CRN)
+);
+
+
+
+------------------------------------------------------------------------
+
+
+
+
+
+
+-- 1. First, insert unique addresses
+INSERT INTO Addresses (Address_ID, Publisher_address)
+SELECT 
+    ROW_NUMBER() OVER (ORDER BY "Publisher address") as Address_ID,
+    "Publisher address"
+FROM (
+    SELECT DISTINCT "Publisher address"
+    FROM "Unnormalized"
+) as unique_addresses;
+
+-- 2. Insert Publishers with references to Addresses
+INSERT INTO Publishers (Publisher_ID, Publisher_name, Address_ID)
+SELECT 
+    ROW_NUMBER() OVER (ORDER BY u."Publisher") as Publisher_ID,
+    u."Publisher",
+    a.Address_ID
+FROM (
+    SELECT DISTINCT "Publisher", "Publisher address"
+    FROM "Unnormalized"
+) u
+JOIN Addresses a ON a.Publisher_address = u."Publisher address";
+
+-- 3. Insert Books
+INSERT INTO Books (ISBN, Title, Edition, Publisher_ID, Pages, Year)
+SELECT DISTINCT
+    "ISBN (PK2)"::VARCHAR,
+    "Title",
+    "Edition"::INTEGER,
+    p.Publisher_ID,
+    "Pages"::INTEGER,
+    "Year"::INTEGER
+FROM "Unnormalized" u
+JOIN Publishers p ON p.Publisher_name = u."Publisher";
+
+-- 4. Insert Courses
+INSERT INTO Courses (CRN, Course_name)
+SELECT DISTINCT
+    "CRN (PK1)"::VARCHAR,
+    "Course name"
+FROM "Unnormalized";
+
+-- 5. Insert Authors
+CREATE SEQUENCE authors_author_id_seq OWNED BY Authors.author_id;
+ALTER TABLE Authors ALTER COLUMN author_id SET DEFAULT nextval('authors_author_id_seq');
+
+WITH RECURSIVE split_authors AS (
+    SELECT DISTINCT unnest(string_to_array("Authors", ',')) as author_name
+    FROM "Unnormalized"
+)
+INSERT INTO Authors (Author_Name)
+SELECT TRIM(author_name)
+FROM split_authors
+WHERE author_name IS NOT NULL
+ON CONFLICT DO NOTHING;
+
+-- 6. Insert BOOK_AUTHORS
+WITH RECURSIVE split_authors AS (
+    SELECT 
+        "ISBN (PK2)"::VARCHAR as isbn,
+        TRIM(unnest(string_to_array("Authors", ','))) as author_name
+    FROM "Unnormalized"
+)
+INSERT INTO BOOK_AUTHORS (ISBN, Author_ID)
+SELECT DISTINCT
+    sa.isbn,
+    a.Author_ID
+FROM split_authors sa
+JOIN Authors a ON TRIM(a.Author_Name) = TRIM(sa.author_name);
+
+-- 7. Insert BOOK_COURSES
+INSERT INTO BOOK_COURSES (ISBN, CRN)
+SELECT DISTINCT
+    "ISBN (PK2)"::VARCHAR,
+    "CRN (PK1)"::VARCHAR
+FROM "Unnormalized";
